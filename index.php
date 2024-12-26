@@ -269,6 +269,7 @@ try {
                 }
             });
         });
+        
         $(document).on('click', '.increase, .decrease', function() {
             const productId = $(this).data('id');
             let quantity = parseInt($('#quantity-' + productId).text());
@@ -279,6 +280,7 @@ try {
                     quantity--;
                 }
             }
+
             $('#quantity-' + productId).text(quantity);
             $.ajax({
                 type: 'POST',
@@ -295,6 +297,7 @@ try {
                 }
             });
         });
+
         $(document).on('click', '.hide', function() {
             const productId = $(this).data('id');
             if (confirm('Вы уверены, что хотите скрыть этот товар?')) {
