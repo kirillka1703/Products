@@ -7,35 +7,26 @@ function connectDatabase($dbname) {
     
     return new PDO($dsn, $username, $password);
 }
-
 // Функция для создания базы данных
 function createDatabase($dbname) {
-    // Подключение к PostgreSQL через базу данных "postgres"
     $connection = connectDatabase('postgres');
-    
     try {
         $connection->exec("CREATE DATABASE $dbname");
         echo "База данных '$dbname' успешно создана.<br>";
     } catch (PDOException $e) {
-        if ($e->getCode() == '42P04') { // Код ошибки для существующей базы данных
+        if ($e->getCode() == '42P04') { 
             echo "База данных '$dbname' уже существует.<br>";
         } else {
             die("Ошибка создания базы данных: " . $e->getMessage());
         }
     }
 }
-
-// Название вашей базы данных
-$dbname = 'my_database'; // Поменяйте на нужное название базы данных
-
+$dbname = 'my_database'; 
 // Создание базы данных, если она не существует
 createDatabase($dbname);
-
-// Подключение к новой базе данных
 try {
     $pdo = connectDatabase($dbname);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
     // Создание таблицы Products, если она не существует
     $createTableQuery = "
     CREATE TABLE IF NOT EXISTS \"Products\" (
@@ -48,22 +39,18 @@ try {
         product_quantity INTEGER,
         concealment BOOLEAN DEFAULT FALSE
     );";
-
-    // Выполняем запрос создания таблицы
     $pdo->exec($createTableQuery);
-
     // Функция для добавления товаров, если они отсутствуют
     function insertDefaultProducts($pdo) {
         $products = [
-            ['product_article' => 'A001', 'product_id' => 1, 'product_name' => 'Крабовые палочки', 'product_price' => 250.0, 'product_quantity' => 52],
-            ['product_article' => 'A002', 'product_id' => 2, 'product_name' => 'Изюм', 'product_price' => 50.0, 'product_quantity' => 4],
-            ['product_article' => 'A003', 'product_id' => 3, 'product_name' => 'Кабачки', 'product_price' => 45.0, 'product_quantity' => 17],
+            ['product_article' => 'F341', 'product_id' => 1, 'product_name' => 'Капуста', 'product_price' => 100, 'product_quantity' => 12],
+            ['product_article' => 'A022', 'product_id' => 2, 'product_name' => 'Картошка', 'product_price' => 200, 'product_quantity' => 20],
+            ['product_article' => 'B103', 'product_id' => 3, 'product_name' => 'Приймите на стажера', 'product_price' => 20000, 'product_quantity' => 1],
         ];
-
         foreach ($products as $product) {
             $stmt = $pdo->prepare("INSERT INTO \"Products\" (product_article, product_id, product_name, product_price, product_quantity) 
-                                    VALUES (:article, :id, :name, :price, :quantity) 
-                                    ON CONFLICT (product_id) DO NOTHING");
+                        VALUES (:article, :id, :name, :price, :quantity) 
+                        ON CONFLICT (product_id) DO NOTHING");
             $stmt->bindValue(':article', $product['product_article']);
             $stmt->bindValue(':id', $product['product_id']);
             $stmt->bindValue(':name', $product['product_name']);
@@ -72,18 +59,14 @@ try {
             $stmt->execute();
         }
     }
-
     // Вставка товаров по умолчанию
     insertDefaultProducts($pdo);
 
-    // Определение класса CProducts
     class CProducts {
         private $pdo;
         public function __construct($dbConnection) {
             $this->pdo = $dbConnection;
         }
-
-        // Получение товаров
         public function getProducts($limit) {
             $stmt = $this->pdo->prepare("SELECT *, 
                                           (CASE WHEN concealment THEN TRUE ELSE FALSE END) as is_hidden 
@@ -95,7 +78,6 @@ try {
             $stmt->execute();
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
-
         // Обновление количества товара
         public function updateQuantity($productId, $quantity) {
             $stmt = $this->pdo->prepare("UPDATE \"Products\" SET product_quantity = :quantity WHERE product_id = :productId");
@@ -103,7 +85,6 @@ try {
             $stmt->bindValue(':productId', $productId, PDO::PARAM_INT);
             return $stmt->execute();
         }
-
         // Скрытие товара
         public function hideProduct($productId) {
             $stmt = $this->pdo->prepare("UPDATE \"Products\" SET concealment = TRUE WHERE product_id = :productId");
@@ -111,11 +92,7 @@ try {
             return $stmt->execute();
         }
     }
-
-    // Создание экземпляра класса CProducts
     $cProducts = new CProducts($pdo);
-
-    // Обработка запросов
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['action'])) {
             switch ($_POST['action']) {
@@ -124,13 +101,11 @@ try {
                         $cProducts->hideProduct($_POST['product_id']);
                     }
                     exit;
-
                 case 'update_quantity':
                     foreach ($_POST['products'] as $product) {
                         $cProducts->updateQuantity($product['id'], $product['quantity']);
                     }
                     exit;
-
                 default:
                     if (isset($_POST['quantity'], $_POST['product_id'])) {
                         $cProducts->updateQuantity($_POST['product_id'], $_POST['quantity']);
@@ -139,8 +114,6 @@ try {
             }
         }
     }
-
-    // Получение товаров для отображения
     $products = $cProducts->getProducts(10);
 } catch (PDOException $e) {
     die("Ошибка подключения: " . $e->getMessage());
@@ -271,7 +244,6 @@ try {
             <?php endforeach; ?>
             </tbody>
         </table>
-        <!-- Кнопка обновления -->
         <button id="update-button">Обновить</button>
     </div>
     <script>
@@ -284,7 +256,7 @@ try {
             });
             $.ajax({
                 type: 'POST',
-                url: '', // Путь к текущему файлу
+                url: '', 
                 data: {
                     action: 'update_quantity',
                     products: products
@@ -297,7 +269,6 @@ try {
                 }
             });
         });
-
         $(document).on('click', '.increase, .decrease', function() {
             const productId = $(this).data('id');
             let quantity = parseInt($('#quantity-' + productId).text());
@@ -311,7 +282,7 @@ try {
             $('#quantity-' + productId).text(quantity);
             $.ajax({
                 type: 'POST',
-                url: '', // Путь к текущему файлу
+                url: '', 
                 data: {
                     product_id: productId,
                     quantity: quantity
@@ -324,13 +295,12 @@ try {
                 }
             });
         });
-
         $(document).on('click', '.hide', function() {
             const productId = $(this).data('id');
             if (confirm('Вы уверены, что хотите скрыть этот товар?')) {
                 $.post('', { action: 'hide', product_id: productId })
                     .done(function() {
-                        $('#product-' + productId).fadeOut(); // Используем fadeOut для плавного скрытия
+                        $('#product-' + productId).fadeOut();
                     })
                     .fail(function() {
                         alert('Произошла ошибка при скрытии товара.');
