@@ -1,12 +1,81 @@
 <?php
-// Подключение к базе данных PostgreSQL
-try {
-    $dsn = "pgsql:host=localhost;port=5432;dbname=postgres"; // Имя вашей базы данных
+// Функция для подключения к PostgreSQL
+function connectDatabase($dbname) {
+    $dsn = "pgsql:host=localhost;port=5432;dbname=$dbname";
     $username = "postgres";
     $password = "580085";
-    // Создаем подключение
-    $pdo = new PDO($dsn, $username, $password);
+    
+    return new PDO($dsn, $username, $password);
+}
+
+// Функция для создания базы данных
+function createDatabase($dbname) {
+    // Подключение к PostgreSQL через базу данных "postgres"
+    $connection = connectDatabase('postgres');
+    
+    try {
+        $connection->exec("CREATE DATABASE $dbname");
+        echo "База данных '$dbname' успешно создана.<br>";
+    } catch (PDOException $e) {
+        if ($e->getCode() == '42P04') { // Код ошибки для существующей базы данных
+            echo "База данных '$dbname' уже существует.<br>";
+        } else {
+            die("Ошибка создания базы данных: " . $e->getMessage());
+        }
+    }
+}
+
+// Название вашей базы данных
+$dbname = 'my_database'; // Поменяйте на нужное название базы данных
+
+// Создание базы данных, если она не существует
+createDatabase($dbname);
+
+// Подключение к новой базе данных
+try {
+    $pdo = connectDatabase($dbname);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Создание таблицы Products, если она не существует
+    $createTableQuery = "
+    CREATE TABLE IF NOT EXISTS \"Products\" (
+        id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+        date_create TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        product_article CHARACTER VARYING,
+        product_id INTEGER UNIQUE,
+        product_name CHARACTER VARYING,
+        product_price DOUBLE PRECISION,
+        product_quantity INTEGER,
+        concealment BOOLEAN DEFAULT FALSE
+    );";
+
+    // Выполняем запрос создания таблицы
+    $pdo->exec($createTableQuery);
+
+    // Функция для добавления товаров, если они отсутствуют
+    function insertDefaultProducts($pdo) {
+        $products = [
+            ['product_article' => 'A001', 'product_id' => 1, 'product_name' => 'Крабовые палочки', 'product_price' => 250.0, 'product_quantity' => 52],
+            ['product_article' => 'A002', 'product_id' => 2, 'product_name' => 'Изюм', 'product_price' => 50.0, 'product_quantity' => 4],
+            ['product_article' => 'A003', 'product_id' => 3, 'product_name' => 'Кабачки', 'product_price' => 45.0, 'product_quantity' => 17],
+        ];
+
+        foreach ($products as $product) {
+            $stmt = $pdo->prepare("INSERT INTO \"Products\" (product_article, product_id, product_name, product_price, product_quantity) 
+                                    VALUES (:article, :id, :name, :price, :quantity) 
+                                    ON CONFLICT (product_id) DO NOTHING");
+            $stmt->bindValue(':article', $product['product_article']);
+            $stmt->bindValue(':id', $product['product_id']);
+            $stmt->bindValue(':name', $product['product_name']);
+            $stmt->bindValue(':price', $product['product_price']);
+            $stmt->bindValue(':quantity', $product['product_quantity']);
+            $stmt->execute();
+        }
+    }
+
+    // Вставка товаров по умолчанию
+    insertDefaultProducts($pdo);
+
     // Определение класса CProducts
     class CProducts {
         private $pdo;
@@ -17,10 +86,7 @@ try {
         // Получение товаров
         public function getProducts($limit) {
             $stmt = $this->pdo->prepare("SELECT *, 
-                                          CASE 
-                                              WHEN concealment THEN TRUE 
-                                              ELSE FALSE 
-                                          END as is_hidden 
+                                          (CASE WHEN concealment THEN TRUE ELSE FALSE END) as is_hidden 
                                           FROM \"Products\" 
                                           WHERE concealment = FALSE 
                                           ORDER BY date_create DESC 
@@ -29,6 +95,7 @@ try {
             $stmt->execute();
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
+
         // Обновление количества товара
         public function updateQuantity($productId, $quantity) {
             $stmt = $this->pdo->prepare("UPDATE \"Products\" SET product_quantity = :quantity WHERE product_id = :productId");
@@ -36,6 +103,7 @@ try {
             $stmt->bindValue(':productId', $productId, PDO::PARAM_INT);
             return $stmt->execute();
         }
+
         // Скрытие товара
         public function hideProduct($productId) {
             $stmt = $this->pdo->prepare("UPDATE \"Products\" SET concealment = TRUE WHERE product_id = :productId");
@@ -43,8 +111,10 @@ try {
             return $stmt->execute();
         }
     }
+
     // Создание экземпляра класса CProducts
     $cProducts = new CProducts($pdo);
+
     // Обработка запросов
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['action'])) {
@@ -55,7 +125,7 @@ try {
                     }
                     exit;
 
-                case 'update_quantity': // Обновление количества всех товаров
+                case 'update_quantity':
                     foreach ($_POST['products'] as $product) {
                         $cProducts->updateQuantity($product['id'], $product['quantity']);
                     }
@@ -69,12 +139,14 @@ try {
             }
         }
     }
+
     // Получение товаров для отображения
     $products = $cProducts->getProducts(10);
 } catch (PDOException $e) {
     die("Ошибка подключения: " . $e->getMessage());
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -156,7 +228,7 @@ try {
         }
         #update-button {
             margin: 20px;
-            background-color: #007BFF; /* Синий цвет для кнопки обновления */
+            background-color: #007BFF; 
             transition: background-color 0.3s;
         }
         #update-button:hover {
@@ -203,7 +275,6 @@ try {
         <button id="update-button">Обновить</button>
     </div>
     <script>
-        // Обработчик нажатия на кнопку "Обновить"
         $(document).on('click', '#update-button', function() {
             const products = [];
             $('tbody tr').each(function() {
@@ -211,7 +282,6 @@ try {
                 const quantity = parseInt($(this).find('.quantity').text());
                 products.push({ id: productId, quantity: quantity });
             });
-            // Отправляем данные на сервер для обновления количества всех товаров
             $.ajax({
                 type: 'POST',
                 url: '', // Путь к текущему файлу
@@ -227,10 +297,10 @@ try {
                 }
             });
         });
+
         $(document).on('click', '.increase, .decrease', function() {
             const productId = $(this).data('id');
             let quantity = parseInt($('#quantity-' + productId).text());
-
             if ($(this).hasClass('increase')) {
                 quantity++;
             } else {
@@ -239,7 +309,6 @@ try {
                 }
             }
             $('#quantity-' + productId).text(quantity);
-            // Сохранение измененного количества в базе данных
             $.ajax({
                 type: 'POST',
                 url: '', // Путь к текущему файлу
@@ -255,17 +324,16 @@ try {
                 }
             });
         });
-        // Скрытие товара
+
         $(document).on('click', '.hide', function() {
             const productId = $(this).data('id');
-
             if (confirm('Вы уверены, что хотите скрыть этот товар?')) {
                 $.post('', { action: 'hide', product_id: productId })
                     .done(function() {
                         $('#product-' + productId).fadeOut(); // Используем fadeOut для плавного скрытия
                     })
                     .fail(function() {
-                        alert('Произошла ошибка при скрытии товара.'); // Сообщение об ошибке
+                        alert('Произошла ошибка при скрытии товара.');
                     });
             }
         });
