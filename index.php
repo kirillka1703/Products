@@ -2,20 +2,20 @@
 // Функция для подключения к MySQL
 function connectDatabase($dbname) {
     $dsn = "mysql:host=localhost;port=3306;dbname=$dbname;charset=utf8mb4";
-    $username = "root"; // или ваш пользователь MySQL
-    $password = "580085"; // ваш пароль
+    $username = "root"; 
+    $password = "580085"; 
 
     return new PDO($dsn, $username, $password);
 }
 
 // Функция для создания базы данных
 function createDatabase($dbname) {
-    $connection = connectDatabase('mysql'); // Подключаемся к MySQL без имени базы данных
+    $connection = connectDatabase('mysql'); 
     try {
         $connection->exec("CREATE DATABASE IF NOT EXISTS $dbname");
         echo "База данных '$dbname' успешно создана.<br>";
     } catch (PDOException $e) {
-        if ($e->getCode() == '42000') { // Код ошибки для существующей базы данных
+        if ($e->getCode() == '42000') { 
             echo "База данных '$dbname' уже существует.<br>";
         } else {
             die("Ошибка создания базы данных: " . $e->getMessage());
@@ -54,7 +54,7 @@ try {
         foreach ($products as $product) {
             $stmt = $pdo->prepare("INSERT INTO Products (product_article, product_id, product_name, product_price, product_quantity) 
                         VALUES (:article, :id, :name, :price, :quantity) 
-                        ON DUPLICATE KEY UPDATE product_quantity = product_quantity"); // Обновление количества
+                        ON DUPLICATE KEY UPDATE product_quantity = product_quantity"); 
             $stmt->bindValue(':article', $product['product_article']);
             $stmt->bindValue(':id', $product['product_id']);
             $stmt->bindValue(':name', $product['product_name']);
