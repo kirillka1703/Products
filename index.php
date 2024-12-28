@@ -1,45 +1,49 @@
 <?php
-// Функция для подключения к PostgreSQL
+// Функция для подключения к MySQL
 function connectDatabase($dbname) {
-    $dsn = "pgsql:host=localhost;port=5432;dbname=$dbname";
-    $username = "postgres";
-    $password = "580085";
-    
+    $dsn = "mysql:host=localhost;port=3306;dbname=$dbname;charset=utf8mb4";
+    $username = "root"; // или ваш пользователь MySQL
+    $password = "580085"; // ваш пароль
+
     return new PDO($dsn, $username, $password);
 }
+
 // Функция для создания базы данных
 function createDatabase($dbname) {
-    $connection = connectDatabase('postgres');
+    $connection = connectDatabase('mysql'); // Подключаемся к MySQL без имени базы данных
     try {
-        $connection->exec("CREATE DATABASE $dbname");
+        $connection->exec("CREATE DATABASE IF NOT EXISTS $dbname");
         echo "База данных '$dbname' успешно создана.<br>";
     } catch (PDOException $e) {
-        if ($e->getCode() == '42P04') { 
+        if ($e->getCode() == '42000') { // Код ошибки для существующей базы данных
             echo "База данных '$dbname' уже существует.<br>";
         } else {
             die("Ошибка создания базы данных: " . $e->getMessage());
         }
     }
 }
+
 $dbname = 'my_database'; 
 // Создание базы данных, если она не существует
 createDatabase($dbname);
 try {
     $pdo = connectDatabase($dbname);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
     // Создание таблицы Products, если она не существует
     $createTableQuery = "
-    CREATE TABLE IF NOT EXISTS \"Products\" (
-        id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    CREATE TABLE IF NOT EXISTS Products (
+        id BIGINT PRIMARY KEY AUTO_INCREMENT,
         date_create TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        product_article CHARACTER VARYING,
-        product_id INTEGER UNIQUE,
-        product_name CHARACTER VARYING,
-        product_price DOUBLE PRECISION,
-        product_quantity INTEGER,
+        product_article VARCHAR(255),
+        product_id INT UNIQUE,
+        product_name VARCHAR(255),
+        product_price DOUBLE,
+        product_quantity INT,
         concealment BOOLEAN DEFAULT FALSE
     );";
     $pdo->exec($createTableQuery);
+    
     // Функция для добавления товаров, если они отсутствуют
     function insertDefaultProducts($pdo) {
         $products = [
@@ -48,9 +52,9 @@ try {
             ['product_article' => 'B103', 'product_id' => 3, 'product_name' => 'Приймите на стажера', 'product_price' => 20000, 'product_quantity' => 1],
         ];
         foreach ($products as $product) {
-            $stmt = $pdo->prepare("INSERT INTO \"Products\" (product_article, product_id, product_name, product_price, product_quantity) 
+            $stmt = $pdo->prepare("INSERT INTO Products (product_article, product_id, product_name, product_price, product_quantity) 
                         VALUES (:article, :id, :name, :price, :quantity) 
-                        ON CONFLICT (product_id) DO NOTHING");
+                        ON DUPLICATE KEY UPDATE product_quantity = product_quantity"); // Обновление количества
             $stmt->bindValue(':article', $product['product_article']);
             $stmt->bindValue(':id', $product['product_id']);
             $stmt->bindValue(':name', $product['product_name']);
@@ -59,6 +63,7 @@ try {
             $stmt->execute();
         }
     }
+    
     // Вставка товаров по умолчанию
     insertDefaultProducts($pdo);
 
@@ -70,7 +75,7 @@ try {
         public function getProducts($limit) {
             $stmt = $this->pdo->prepare("SELECT *, 
                                           (CASE WHEN concealment THEN TRUE ELSE FALSE END) as is_hidden 
-                                          FROM \"Products\" 
+                                          FROM Products 
                                           WHERE concealment = FALSE 
                                           ORDER BY date_create DESC 
                                           LIMIT :limit");
@@ -80,18 +85,19 @@ try {
         }
         // Обновление количества товара
         public function updateQuantity($productId, $quantity) {
-            $stmt = $this->pdo->prepare("UPDATE \"Products\" SET product_quantity = :quantity WHERE product_id = :productId");
+            $stmt = $this->pdo->prepare("UPDATE Products SET product_quantity = :quantity WHERE product_id = :productId");
             $stmt->bindValue(':quantity', $quantity, PDO::PARAM_INT);
             $stmt->bindValue(':productId', $productId, PDO::PARAM_INT);
             return $stmt->execute();
         }
         // Скрытие товара
         public function hideProduct($productId) {
-            $stmt = $this->pdo->prepare("UPDATE \"Products\" SET concealment = TRUE WHERE product_id = :productId");
+            $stmt = $this->pdo->prepare("UPDATE Products SET concealment = TRUE WHERE product_id = :productId");
             $stmt->bindValue(':productId', $productId, PDO::PARAM_INT);
             return $stmt->execute();
         }
     }
+
     $cProducts = new CProducts($pdo);
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['action'])) {
@@ -269,7 +275,7 @@ try {
                 }
             });
         });
-        
+
         $(document).on('click', '.increase, .decrease', function() {
             const productId = $(this).data('id');
             let quantity = parseInt($('#quantity-' + productId).text());
